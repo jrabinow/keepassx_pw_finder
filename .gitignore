@@ -2,3 +2,6 @@ pykeepass_socket
 *.swp
 venv
 build/*
+__pycache__
+*.pyc
+docs/
