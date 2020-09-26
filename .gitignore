@@ -1,2 +1,4 @@
 pykeepass_socket
 *.swp
+venv
+build/*
