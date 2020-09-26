@@ -76,7 +76,7 @@ def is_dir_world_readable(directory: str = ".") -> bool:
     return bool(st.st_mode & stat.S_IROTH)
 
 
-def pykeepass_with_cache(
+def get_entries_from_db(
     db_file: str,
     key_file: str,
     needle: str,
@@ -84,44 +84,38 @@ def pykeepass_with_cache(
     needle_is_regex: bool = True,
     re_flags: str = "I",
     enable_history_search: bool = False,
-    timeout: int = 300,
+    timeout: int = 0,
 ) -> List[entry.Entry]:
+
+    use_cache: bool = False
+    if timeout > 0:
+        if is_dir_world_readable():
+            LOG.warning(
+                "current dir is world-readable; you will have to enter your pw "
+                "at every call to avoid security risks"
+            )
+        else:
+            use_cache = True
 
     password: Optional[str] = None
-    if db_file not in cached_databases(socket_path=socket_path):
+    if use_cache:
+        if db_file not in cached_databases(socket_path=socket_path):
+            password = getpass.getpass()
+        kp = PyKeePassWithCache(
+            db_file,
+            password=password,
+            keyfile=key_file,
+            timeout=timeout,
+            socket_path=socket_path,
+        )
+    else:
         password = getpass.getpass()
+        kp = PyKeePassNoCache(
+            db_file,
+            password=password,
+            keyfile=key_file,
+        )
 
-    kp = PyKeePassWithCache(
-        db_file,
-        password=password,
-        keyfile=key_file,
-        timeout=timeout,
-        socket_path=socket_path,
-    )
-    entries: List[entry.Entry] = kp.find_entries_by_password(
-        needle,
-        regex=needle_is_regex,
-        flags=re_flags,
-        history=enable_history_search,
-    )
-    return entries
-
-
-def pykeepass_nocache(
-    db_file: str,
-    key_file: str,
-    needle: str,
-    needle_is_regex: bool = True,
-    re_flags: str = "I",
-    enable_history_search: bool = False,
-) -> List[entry.Entry]:
-
-    password: str = getpass.getpass()
-    kp = PyKeePassNoCache(
-        db_file,
-        password=password,
-        keyfile=key_file,
-    )
     entries: List[entry.Entry] = kp.find_entries_by_password(
         needle,
         regex=needle_is_regex,
@@ -135,35 +129,15 @@ def main():
     args = parse_args()
     args.re_flags = "|".join(args.re_flags)
 
-    use_cache: bool = False
-    if args.timeout > 0:
-        if is_dir_world_readable():
-            LOG.warning(
-                "current dir is world-readable; you will have to enter your pw "
-                "at every call to avoid security risks"
-            )
-        else:
-            use_cache = True
-
-    if use_cache:
-        entries = pykeepass_with_cache(
-            args.db,
-            args.key_file,
-            args.needle,
-            needle_is_regex=not args.no_regex,
-            re_flags=args.re_flags,
-            enable_history_search=args.enable_history,
-            timeout=args.timeout,
-        )
-    else:
-        entries = pykeepass_nocache(
-            args.db,
-            args.key_file,
-            args.needle,
-            needle_is_regex=not args.no_regex,
-            re_flags=args.re_flags,
-            enable_history_search=args.enable_history,
-        )
+    entries = get_entries_from_db(
+        args.db,
+        args.key_file,
+        args.needle,
+        needle_is_regex=not args.no_regex,
+        re_flags=args.re_flags,
+        enable_history_search=args.enable_history,
+        timeout=args.timeout,
+    )
 
     for e in entries:
         print(e)

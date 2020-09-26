@@ -9,6 +9,7 @@ docs:
 
 clean:
 	$(RM) pykeepass_socket
-	$(RM) -r ./build/ .mypy_cache
+	$(RM) -r ./build/ .mypy_cache ./src/__pycache__ ./src/*.pyc
+	cd docs && $(MAKE) clean
 
 .PHONY: clean docs
