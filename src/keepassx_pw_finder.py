@@ -7,6 +7,10 @@ when you believe a shared pw or a pw root is compromised and you want to expire
 it everywhere at once
 """
 
+from typing import List, Optional
+from pykeepass import PyKeePass as PyKeePassNoCache, entry
+from pykeepass_cache import PyKeePass as PyKeePassWithCache, cached_databases
+
 import argparse
 import getpass
 import logging
@@ -21,8 +25,8 @@ ch.setFormatter(formatter)
 LOG.addHandler(ch)
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
+def parse_args() -> argparse.Namespace:
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -67,51 +71,62 @@ def parse_args():
     return parser.parse_args()
 
 
-def is_dir_world_readable(directory="."):
+def is_dir_world_readable(directory: str = ".") -> bool:
     st = os.stat(directory)
     return bool(st.st_mode & stat.S_IROTH)
 
 
-def pykeepass_with_cache(args):
-    from pykeepass_cache import PyKeePass, cached_databases
+def pykeepass_with_cache(
+    db_file: str,
+    key_file: str,
+    needle: str,
+    socket_path: str = "./pykeepass_socket",
+    needle_is_regex: bool = True,
+    re_flags: str = "I",
+    enable_history_search: bool = False,
+    timeout: int = 300,
+) -> List[entry.Entry]:
 
-    socket_path = "./pykeepass_socket"
+    password: Optional[str] = None
+    if db_file not in cached_databases(socket_path=socket_path):
+        password = getpass.getpass()
 
-    if args.db not in cached_databases(socket_path=socket_path):
-        pw = getpass.getpass()
-    else:
-        pw = None
-
-    kp = PyKeePass(
-        args.db,
-        password=pw,
-        keyfile=args.key_file,
-        timeout=args.timeout,
+    kp = PyKeePassWithCache(
+        db_file,
+        password=password,
+        keyfile=key_file,
+        timeout=timeout,
         socket_path=socket_path,
     )
-    entries = kp.find_entries_by_password(
-        args.needle,
-        regex=not args.no_regex,
-        flags=args.re_flags,
-        history=args.enable_history,
+    entries: List[entry.Entry] = kp.find_entries_by_password(
+        needle,
+        regex=needle_is_regex,
+        flags=re_flags,
+        history=enable_history_search,
     )
     return entries
 
 
-def pykeepass_nocache(args):
-    from pykeepass import PyKeePass
+def pykeepass_nocache(
+    db_file: str,
+    key_file: str,
+    needle: str,
+    needle_is_regex: bool = True,
+    re_flags: str = "I",
+    enable_history_search: bool = False,
+) -> List[entry.Entry]:
 
-    pw = getpass.getpass()
-    kp = PyKeePass(
-        args.db,
-        password=pw,
-        keyfile=args.key_file,
+    password: str = getpass.getpass()
+    kp = PyKeePassNoCache(
+        db_file,
+        password=password,
+        keyfile=key_file,
     )
-    entries = kp.find_entries_by_password(
-        args.needle,
-        regex=not args.no_regex,
-        flags=args.re_flags,
-        history=args.enable_history,
+    entries: List[entry.Entry] = kp.find_entries_by_password(
+        needle,
+        regex=needle_is_regex,
+        flags=re_flags,
+        history=enable_history_search,
     )
     return entries
 
@@ -120,7 +135,7 @@ def main():
     args = parse_args()
     args.re_flags = "|".join(args.re_flags)
 
-    use_cache = False
+    use_cache: bool = False
     if args.timeout > 0:
         if is_dir_world_readable():
             LOG.warning(
@@ -131,9 +146,24 @@ def main():
             use_cache = True
 
     if use_cache:
-        entries = pykeepass_with_cache(args)
+        entries = pykeepass_with_cache(
+            args.db,
+            args.key_file,
+            args.needle,
+            needle_is_regex=not args.no_regex,
+            re_flags=args.re_flags,
+            enable_history_search=args.enable_history,
+            timeout=args.timeout,
+        )
     else:
-        entries = pykeepass_nocache(args)
+        entries = pykeepass_nocache(
+            args.db,
+            args.key_file,
+            args.needle,
+            needle_is_regex=not args.no_regex,
+            re_flags=args.re_flags,
+            enable_history_search=args.enable_history,
+        )
 
     for e in entries:
         print(e)
