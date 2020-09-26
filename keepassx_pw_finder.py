@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument(
         "-k",
         "--key-file",
+        help="key file to unlock keypassx db",
     )
     parser.add_argument(
         "--no-regex",
@@ -52,7 +53,9 @@ def parse_args():
         "--timeout",
         default=0,
         type=int,
-        help="how long to cache the db in memory for (default is disabled)",
+        help="cache the unlocked db for TIMEOUT seconds between program runs, to"
+        " allow for not having to reenter the password at every run. Default is"
+        " disabled",
     )
     parser.add_argument(
         "--enable-history",
@@ -121,7 +124,8 @@ def main():
     if args.timeout > 0:
         if is_dir_world_readable():
             LOG.warning(
-                "current dir is world-readable; you will have to enter your pw at every call to avoid security risks"
+                "current dir is world-readable; you will have to enter your pw "
+                "at every call to avoid security risks"
             )
         else:
             use_cache = True
