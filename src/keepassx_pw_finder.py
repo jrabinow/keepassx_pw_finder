@@ -10,6 +10,7 @@ it everywhere at once
 from typing import List, Optional
 from pykeepass import PyKeePass as PyKeePassNoCache, entry
 from pykeepass_cache import PyKeePass as PyKeePassWithCache, cached_databases
+from pykeepass.exceptions import CredentialsError
 
 import argparse
 import getpass
@@ -17,7 +18,11 @@ import logging
 import os
 import stat
 
-LOG = logging.getLogger()
+import rpyc
+
+rpyc.core.vinegar._generic_exceptions_cache["pykeepass.exceptions.CredentialsError"] = CredentialsError
+
+LOG: logging.Logger = logging.getLogger()
 LOG.setLevel("INFO")
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 ch = logging.StreamHandler()
@@ -72,7 +77,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def is_dir_world_readable(directory: str = ".") -> bool:
-    st = os.stat(directory)
+    st: os.stat_result = os.stat(directory)
     return bool(st.st_mode & stat.S_IROTH)
 
 
@@ -129,18 +134,21 @@ def main():
     args = parse_args()
     args.re_flags = "|".join(args.re_flags)
 
-    entries = get_entries_from_db(
-        args.db,
-        args.key_file,
-        args.needle,
-        needle_is_regex=not args.no_regex,
-        re_flags=args.re_flags,
-        enable_history_search=args.enable_history,
-        timeout=args.timeout,
-    )
+    try:
+        entries = get_entries_from_db(
+            args.db,
+            args.key_file,
+            args.needle,
+            needle_is_regex=not args.no_regex,
+            re_flags=args.re_flags,
+            enable_history_search=args.enable_history,
+            timeout=args.timeout,
+        )
 
-    for e in entries:
-        print(e)
+        for e in entries:
+            print(e)
+    except CredentialsError as e:
+        LOG.fatal("bad credentials")
 
 
 if __name__ == "__main__":
